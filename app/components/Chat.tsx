@@ -53,40 +53,52 @@ export default function Chat() {
   };
 
   return (
-    <div className="flex flex-col h-screen max-w-2xl mx-auto p-4">
+    <div className="flex flex-col h-full p-4">
       <div className="flex-1 overflow-y-auto mb-4 space-y-4">
         {messages.map((message, index) => (
           <div
             key={index}
-            className={`p-4 rounded-lg ${
-              message.isUser
-                ? 'bg-blue-500 text-white ml-auto'
-                : 'bg-gray-200 text-gray-800'
-            } max-w-[80%]`}
+            className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
           >
-            {message.text}
+            <div
+              className={`p-3 rounded-2xl max-w-[80%] ${
+                message.isUser
+                  ? 'bg-[#0084FF] text-white rounded-tr-none'
+                  : 'bg-gray-100 text-gray-800 rounded-tl-none'
+              }`}
+            >
+              {message.text}
+            </div>
           </div>
         ))}
         {isLoading && (
-          <div className="bg-gray-200 text-gray-800 p-4 rounded-lg max-w-[80%]">
-            En train de réfléchir...
+          <div className="flex justify-start">
+            <div className="bg-gray-100 text-gray-800 p-3 rounded-2xl rounded-tl-none max-w-[80%]">
+              <div className="flex space-x-2">
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+              </div>
+            </div>
           </div>
         )}
       </div>
-      <form onSubmit={handleSubmit} className="flex gap-2">
+      <form onSubmit={handleSubmit} className="flex gap-2 mt-2">
         <input
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Posez votre question..."
-          className="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="Écrivez votre message..."
+          className="flex-1 p-3 border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-[#0084FF] focus:border-transparent"
         />
         <button
           type="submit"
           disabled={isLoading}
-          className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 disabled:bg-blue-300"
+          className="bg-[#0084FF] text-white p-3 rounded-full hover:bg-[#0073E6] disabled:bg-[#0084FF]/50 transition-colors duration-200"
         >
-          Envoyer
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+          </svg>
         </button>
       </form>
     </div>
