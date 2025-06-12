@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import fetch from 'node-fetch';
+import https from 'https';
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,6 +16,11 @@ export async function POST(req: NextRequest) {
     formData.append('question', question);
     formData.append('openai_api_key', apiKey);
 
+    // Créer un agent HTTPS pour ignorer les erreurs de certificat
+    const httpsAgent = new https.Agent({
+      rejectUnauthorized: false, // ✅ ignore les erreurs de certificat
+    });
+
     // Appeler le backend Python
     const response = await fetch('https://api-rag.onexus.tech:8443/ask/', {
       method: 'POST',
@@ -21,6 +28,7 @@ export async function POST(req: NextRequest) {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: formData.toString(),
+      agent: httpsAgent,
     });
 
     const data = await response.json();
