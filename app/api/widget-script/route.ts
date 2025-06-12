@@ -14,12 +14,12 @@ export async function GET(request: Request) {
   widgetContainer.id = 'onexus-chatwidget-container';
   widgetContainer.style.cssText = \`
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
+    bottom: 20px;
+    right: 20px;
+    width: 400px;
+    height: 600px;
     z-index: 999999;
+    pointer-events: auto;
   \`;
 
   // Créer l'iframe
@@ -30,7 +30,8 @@ export async function GET(request: Request) {
     width: 100%;
     height: 100%;
     background: transparent;
-    pointer-events: auto;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
   \`;
   iframe.setAttribute('allow', 'clipboard-write');
 
