@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     formData.append('openai_api_key', apiKey);
 
     // Appeler le backend Python
-    const response = await fetch('http://127.0.0.1:8000/ask/', {
+    const response = await fetch('https://api-rag.onexus.tech:8443/ask/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
