@@ -24,8 +24,22 @@ export async function POST(req: NextRequest) {
     });
 
     const data = await response.json();
+    
+    if (!response.ok) {
+      return NextResponse.json({
+        error: 'Erreur du backend',
+        status: response.status,
+        statusText: response.statusText,
+        details: data
+      }, { status: response.status });
+    }
+
     return NextResponse.json(data);
-  } catch {
-    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
+  } catch (error) {
+    console.error('Erreur serveur:', error);
+    return NextResponse.json({ 
+      error: 'Erreur serveur',
+      details: error instanceof Error ? error.message : String(error)
+    }, { status: 500 });
   }
 } 
