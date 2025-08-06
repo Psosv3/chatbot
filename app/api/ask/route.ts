@@ -14,7 +14,9 @@ export async function POST(req: NextRequest) {
     // Préparer les données au format x-www-form-urlencoded
     const formData = new URLSearchParams();
     formData.append('question', question);
-    formData.append('openai_api_key', apiKey);
+    formData.append('company_id', 'd6738c8d-7e4d-4406-a298-8a640620879c');
+    formData.append('langue', 'Français');
+    // formData.append('openai_api_key', apiKey);
 
     // Créer un agent HTTPS pour ignorer les erreurs de certificat
     const httpsAgent = new https.Agent({
@@ -22,7 +24,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Appeler le backend Python
-    const response = await fetch('https://api-rag.onexus.tech:8443/ask/', {
+    const response = await fetch('http://api-rag.onexus.tech:8000/ask_public/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
