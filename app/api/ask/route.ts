@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fetch from 'node-fetch';
-import https from 'https';
+import http from 'http';
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,9 +18,9 @@ export async function POST(req: NextRequest) {
     formData.append('langue', 'Français');
     // formData.append('openai_api_key', apiKey);
 
-    // Créer un agent HTTPS pour ignorer les erreurs de certificat
-    const httpsAgent = new https.Agent({
-      rejectUnauthorized: false, // ✅ ignore les erreurs de certificat
+    // Créer un agent HTTP pour les requêtes non-sécurisées
+    const httpAgent = new http.Agent({
+      keepAlive: true,
     });
 
     // Appeler le backend Python
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: formData.toString(),
-      agent: httpsAgent,
+      agent: httpAgent,
     });
 
     const data = await response.json();
