@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
-  const { origin } = new URL(request.url);
+  const { origin, searchParams } = new URL(request.url);
+  const companyId = searchParams.get('company_id') || 'default-company-id'; // fallback
   
   const widgetScript = `
 (function() {
@@ -24,7 +25,7 @@ export async function GET(request: Request) {
 
   // Créer l'iframe
   const iframe = document.createElement('iframe');
-  iframe.src = '${origin}/widget';
+  iframe.src = '${origin}/widget?company_id=${companyId}';
   iframe.style.cssText = \`
     border: none;
     width: 100%;

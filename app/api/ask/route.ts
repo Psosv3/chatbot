@@ -4,7 +4,7 @@ import http from 'http';
 
 export async function POST(req: NextRequest) {
   try {
-    const { question } = await req.json();
+    const { question, company_id } = await req.json();
 
     if (!question) {
       return NextResponse.json({ error: 'Question manquante' }, { status: 400 });
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     // Préparer les données au format JSON pour l'API publique
     const requestBody = {
       question: question,
-      company_id: 'd6738c8d-7e4d-4406-a298-8a640620879c',
+      company_id: company_id || 'd6738c8d-7e4d-4406-a298-8a640620879c',
       langue: 'Français'
     };
 
