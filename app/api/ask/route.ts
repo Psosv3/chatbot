@@ -5,18 +5,17 @@ import http from 'http';
 export async function POST(req: NextRequest) {
   try {
     const { question } = await req.json();
-    const apiKey = process.env.OPENAI_API_KEY;
 
-    if (!question || !apiKey) {
-      return NextResponse.json({ error: 'question ou clé API manquante' }, { status: 400 });
+    if (!question) {
+      return NextResponse.json({ error: 'Question manquante' }, { status: 400 });
     }
 
-    // Préparer les données au format x-www-form-urlencoded
-    const formData = new URLSearchParams();
-    formData.append('question', question);
-    formData.append('company_id', 'd6738c8d-7e4d-4406-a298-8a640620879c');
-    formData.append('langue', 'Français');
-    // formData.append('openai_api_key', apiKey);
+    // Préparer les données au format JSON pour l'API publique
+    const requestBody = {
+      question: question,
+      company_id: 'd6738c8d-7e4d-4406-a298-8a640620879c',
+      langue: 'Français'
+    };
 
     // Créer un agent HTTP pour les requêtes non-sécurisées
     const httpAgent = new http.Agent({
@@ -27,9 +26,9 @@ export async function POST(req: NextRequest) {
     const response = await fetch('http://api-rag.onexus.tech:8000/ask_public/', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/json',
       },
-      body: formData.toString(),
+      body: JSON.stringify(requestBody),
       agent: httpAgent,
     });
 
