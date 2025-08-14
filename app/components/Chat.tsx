@@ -39,7 +39,7 @@ export default function Chat() {
           setMessages(updatedSession.messages);
         }
       } catch (error) {
-        console.log('Synchronisation avec le backend impossible, utilisation du cache local');
+        console.log('Synchronisation avec le backend impossible, utilisation du cache local',error);
       }
     } else {
       // Créer une nouvelle session

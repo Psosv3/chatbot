@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { sessionService, type ChatSession } from '../lib/sessionService';
 
 interface SessionManagerProps {
@@ -13,15 +13,15 @@ export default function SessionManager({ companyId, onSessionSelect, currentSess
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [isOpen, setIsOpen] = useState(false);
 
-  useEffect(() => {
-    loadSessions();
-  }, [companyId]);
-
-  const loadSessions = () => {
+  const loadSessions = useCallback(() => {
     const allSessions = sessionService.getAllSessions();
     const companySessions = allSessions.filter(s => s.companyId === companyId);
     setSessions(companySessions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-  };
+  }, [companyId]);
+
+  useEffect(() => {
+    loadSessions();
+  }, [loadSessions]);
 
   const handleNewSession = () => {
     const newSession = sessionService.createNewSession(companyId);
