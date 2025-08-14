@@ -4,7 +4,7 @@ import http from 'http';
 
 export async function POST(req: NextRequest) {
   try {
-    const { question, company_id } = await req.json();
+    const { question, company_id, session_id, external_user_id } = await req.json();
 
     if (!question) {
       return NextResponse.json({ error: 'Question manquante' }, { status: 400 });
@@ -14,6 +14,8 @@ export async function POST(req: NextRequest) {
     const requestBody = {
       question: question,
       company_id: company_id || 'd6738c8d-7e4d-4406-a298-8a640620879c',
+      session_id: session_id,
+      external_user_id: external_user_id,
       langue: 'Français'
     };
 
@@ -23,7 +25,8 @@ export async function POST(req: NextRequest) {
     });
 
     // Appeler le backend Python
-    const response = await fetch('http://api-rag.onexus.tech:8000/ask_public/', {
+    // const response = await fetch('http://api-rag.onexus.tech:8000/ask_public/', {
+    const response = await fetch('http://localhost:8000/ask_public/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

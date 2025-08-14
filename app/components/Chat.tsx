@@ -1,41 +1,88 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-
-interface Message {
-  text: string;
-  isUser: boolean;
-}
+import { sessionService, type ChatSession, type Message } from '../lib/sessionService';
 
 export default function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const id = urlParams.get('company_id');
     setCompanyId(id);
+    
+    // Charger la session existante ou en créer une nouvelle
+    if (id) {
+      loadOrCreateSession(id);
+    }
   }, []);
+
+  const loadOrCreateSession = async (companyId: string) => {
+    // Essayer de charger la session existante
+    const existingSession = sessionService.getCurrentSession();
+    
+    if (existingSession && existingSession.companyId === companyId) {
+      setCurrentSession(existingSession);
+      setMessages(existingSession.messages);
+      
+      // Synchroniser avec le backend en arrière-plan
+      try {
+        await sessionService.syncSessionWithBackend(existingSession.sessionId, companyId);
+        // Recharger la session après synchronisation
+        const updatedSession = sessionService.getCurrentSession();
+        if (updatedSession) {
+          setCurrentSession(updatedSession);
+          setMessages(updatedSession.messages);
+        }
+      } catch (error) {
+        console.log('Synchronisation avec le backend impossible, utilisation du cache local');
+      }
+    } else {
+      // Créer une nouvelle session
+      const newSession = sessionService.createNewSession(companyId);
+      setCurrentSession(newSession);
+      setMessages([]);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() || !currentSession) return;
 
-    // Ajouter le message de l'utilisateur
-    const userMessage: Message = { text: input, isUser: true };
+    // Créer le message utilisateur avec timestamp
+    const userMessage: Message = { 
+      text: input, 
+      isUser: true, 
+      timestamp: new Date().toISOString() 
+    };
+    
+    // Ajouter le message à l'affichage et à la session
     setMessages(prev => [...prev, userMessage]);
+    sessionService.addMessageToSession(currentSession.sessionId, userMessage);
+    
+    const question = input;
     setInput('');
     setIsLoading(true);
 
     try {
+      // Préparer la requête avec session_id et external_user_id
+      const requestBody = {
+        question: question,
+        company_id: companyId,
+        session_id: currentSession.sessionId,
+        external_user_id: currentSession.externalUserId
+      };
+
       const response = await fetch('/api/ask', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ question: input,company_id: companyId}),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -44,16 +91,42 @@ export default function Chat() {
 
       const data = await response.json();
       
-      // Ajouter la réponse du bot
-      const botMessage: Message = { text: data.answer, isUser: false };
+      // Créer le message bot avec timestamp
+      const botMessage: Message = { 
+        text: data.answer, 
+        isUser: false, 
+        timestamp: new Date().toISOString() 
+      };
+      
+      // Ajouter la réponse du bot à l'affichage et à la session
       setMessages(prev => [...prev, botMessage]);
+      sessionService.addMessageToSession(currentSession.sessionId, botMessage);
+      
+      // Mettre à jour le sessionId si le backend a retourné un nouveau
+      if (data.session_id && data.session_id !== currentSession.sessionId) {
+        sessionService.updateSessionId(currentSession.sessionId, data.session_id);
+        setCurrentSession(prev => prev ? { ...prev, sessionId: data.session_id } : null);
+      }
+      
+      // Mettre à jour la session complète
+      const updatedSession: ChatSession = {
+        ...currentSession,
+        sessionId: data.session_id || currentSession.sessionId,
+        messages: [...currentSession.messages, userMessage, botMessage]
+      };
+      sessionService.saveSession(updatedSession);
+      setCurrentSession(updatedSession);
+      
+      console.log("Message émis et session sauvegardée:", data.session_id);
     } catch (error) {
       console.error('Erreur lors de la communication avec le backend:', error);
       const errorMessage: Message = { 
         text: "Désolé, une erreur s'est produite lors de la communication avec le serveur.", 
-        isUser: false 
+        isUser: false,
+        timestamp: new Date().toISOString()
       };
       setMessages(prev => [...prev, errorMessage]);
+      sessionService.addMessageToSession(currentSession.sessionId, errorMessage);
     } finally {
       setIsLoading(false);
     }
