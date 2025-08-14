@@ -25,8 +25,8 @@ export async function POST(req: NextRequest) {
     });
 
     // Appeler le backend Python
-    // const response = await fetch('http://api-rag.onexus.tech:8000/ask_public/', {
-    const response = await fetch('http://localhost:8000/ask_public/', {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/ask_public/`, {
+    // const response = await fetch('http://localhost:8000/ask_public/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

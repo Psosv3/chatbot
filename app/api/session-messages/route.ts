@@ -6,7 +6,7 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const sessionId = searchParams.get('session_id');
-    const companyId = searchParams.get('company_id');
+    // const companyId = searchParams.get('company_id');
 
     if (!sessionId) {
       return NextResponse.json({ error: 'session_id manquant' }, { status: 400 });
@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     });
 
     // Appeler le backend Python pour récupérer les messages
-    const response = await fetch(`http://localhost:8000/messages_public/${sessionId}`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages_public/${sessionId}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
     const data = await response.json();
     
     // Convertir le format backend vers le format frontend
-    const messages = data.map((msg: any) => ({
+    const messages = (data as Array<{ content: string; role: string; created_at: string }>).map((msg) => ({
       text: msg.content,
       isUser: msg.role === 'user',
       timestamp: msg.created_at
