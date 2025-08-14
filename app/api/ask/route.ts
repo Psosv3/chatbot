@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fetch from 'node-fetch';
 import http from 'http';
-import https from 'https';
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,24 +19,20 @@ export async function POST(req: NextRequest) {
       langue: 'Français'
     };
 
-    // Déterminer l'URL du backend (enlever le @ au début si présent)
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/^@/, '') || 'http://localhost:8000';
-    const backendUrl = `${apiUrl}/ask_public/`;
-    
-    // Créer l'agent approprié selon le protocole
-    const isHttps = backendUrl.startsWith('https://');
-    const agent = isHttps 
-      ? new https.Agent({ keepAlive: true, rejectUnauthorized: false }) // rejectUnauthorized: false pour les certificats auto-signés si nécessaire
-      : new http.Agent({ keepAlive: true });
+    // Créer un agent HTTP pour les requêtes non-sécurisées
+    const httpAgent = new http.Agent({
+      keepAlive: true,
+    });
 
     // Appeler le backend Python
-    const response = await fetch(backendUrl, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/ask_public/`, {
+    // const response = await fetch('http://localhost:8000/ask_public/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(requestBody),
-      agent: agent,
+      agent: httpAgent,
     });
 
     const data = await response.json();
