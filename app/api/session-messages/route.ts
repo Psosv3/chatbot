@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fetch from 'node-fetch';
 import http from 'http';
+import https from 'https';
 
 export async function GET(req: NextRequest) {
   try {
@@ -12,18 +13,23 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'session_id manquant' }, { status: 400 });
     }
 
-    // Créer un agent HTTP pour les requêtes non-sécurisées
-    const httpAgent = new http.Agent({
-      keepAlive: true,
-    });
+    // Déterminer l'URL du backend (enlever le @ au début si présent)
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/^@/, '') || 'http://localhost:8000';
+    const backendUrl = `${apiUrl}/messages_public/${sessionId}`;
+    
+    // Créer l'agent approprié selon le protocole
+    const isHttps = backendUrl.startsWith('https://');
+    const agent = isHttps 
+      ? new https.Agent({ keepAlive: true, rejectUnauthorized: false })
+      : new http.Agent({ keepAlive: true });
 
     // Appeler le backend Python pour récupérer les messages
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages_public/${sessionId}`, {
+    const response = await fetch(backendUrl, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
       },
-      agent: httpAgent,
+      agent: agent,
     });
 
     if (!response.ok) {
