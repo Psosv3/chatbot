@@ -5,7 +5,8 @@ import crypto from "crypto";
 const VERIFY_TOKEN = process.env.MESSENGER_VERIFY_TOKEN!;
 const APP_SECRET = process.env.MESSENGER_APP_SECRET!;
 const PAGE_TOKEN = process.env.MESSENGER_PAGE_TOKEN!;
-const PUBLIC_ASK_URL = process.env.NEXT_PUBLIC_API_URL + "/api/ask"; // correction de l'URL
+// URL de votre route /ask locale (pas besoin de NEXT_PUBLIC_API_URL)
+const PUBLIC_ASK_URL = "/api/ask";
 
 // --- Vérification Webhook (GET) ---
 export async function GET(req: NextRequest) {
@@ -61,6 +62,9 @@ async function askBot(params: {
   session_id?: string;
   external_user_id?: string; // on mettra le PSID ici
 }) {
+  console.log("🤖 Appel de askBot avec:", params);
+  console.log("🌐 URL appelée:", PUBLIC_ASK_URL);
+  
   const res = await fetch(PUBLIC_ASK_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
