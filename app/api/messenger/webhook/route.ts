@@ -84,7 +84,7 @@ async function askBot(params: {
 
 // --- Réception des events (POST) ---
 export async function POST(req: NextRequest) {
-  const rawBody = await req.text();
+  const rawBody = await req.text(); 
 
   // 1) Vérifier la signature Meta
   if (!verifySignature(req, rawBody)) {
