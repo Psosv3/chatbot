@@ -55,7 +55,7 @@ function verifySignature(req: NextRequest, rawBody: string) {
   }
 }
 
-// --- Ton call vers l’API publique /ask_public/ (ton code) ---
+// --- Ton call vers l'API publique /ask_public/ (ton code) ---
 async function askBot(params: {
   question: string;
   company_id?: string;
@@ -65,25 +65,35 @@ async function askBot(params: {
   console.log("🤖 Appel de askBot avec:", params);
   console.log("🌐 URL appelée:", PUBLIC_ASK_URL);
   
-  const res = await fetch(PUBLIC_ASK_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      question: params.question,
-      company_id: "b28cfe88-807b-49de-97f7-fd974cfd0d17",
-      session_id: "xxx",
-      external_user_id: params.external_user_id,
-      langue: "Français",
-    }),
-    // ton http.Agent n'est pas nécessaire ici (Next est en HTTPS). Garde-le si ton infra l’exige.
-  });
+  try {
+    const res = await fetch(PUBLIC_ASK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question: params.question,
+        company_id: "b28cfe88-807b-49de-97f7-fd974cfd0d17",
+        session_id: "xxx",
+        external_user_id: params.external_user_id,
+        langue: "Français",
+      }),
+    });
 
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(`Backend error ${res.status}: ${JSON.stringify(data)}`);
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(`Backend error ${res.status}: ${JSON.stringify(data)}`);
+    }
+    // on suppose que ta réponse Python renvoie { answer: "...", ... }
+    return (data?.answer as string) || "Désolé, je n'ai pas de réponse pour le moment.";
+  } catch (error) {
+    console.error("❌ Erreur lors de l'appel à l'API:", error);
+    
+    // Fallback local pour les erreurs Mistral AI
+    if (error instanceof Error && error.message.includes("429")) {
+      return "Je suis temporairement surchargé. Voici une réponse de base : Je suis votre assistant virtuel. Comment puis-je vous aider aujourd'hui ? 🤖";
+    }
+    
+    throw error; // Relancer l'erreur pour la gestion dans le webhook
   }
-  // on suppose que ta réponse Python renvoie { answer: "...", ... }
-  return (data?.answer as string) || "Désolé, je n'ai pas de réponse pour le moment.";
 }
 
 // --- Réception des events (POST) ---
@@ -151,7 +161,15 @@ export async function POST(req: NextRequest) {
           ? (e as { message: string }).message
           : String(e);
         console.error("Messenger handler error:", message);
-        await sendText(psid, "Oups, un souci côté serveur. Réessayez dans un instant svp.");
+        
+        // Gestion spécifique des erreurs Mistral AI
+        if (message.includes("429") || message.includes("capacity exceeded")) {
+          await sendText(psid, "Désolé, je suis temporairement surchargé. Réessayez dans quelques minutes ou contactez le support si le problème persiste. 🤖");
+        } else if (message.includes("Backend error 500")) {
+          await sendText(psid, "Oups, un souci côté serveur. Réessayez dans un instant svp. 🔧");
+        } else {
+          await sendText(psid, "Désolé, une erreur inattendue s'est produite. Réessayez plus tard. 😔");
+        }
       } finally {
         await sendSenderAction(psid, "typing_off");
       }
