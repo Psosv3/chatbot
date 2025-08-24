@@ -70,7 +70,7 @@ async function askBot(params: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       question: params.question,
-      company_id: "d6738c8d-7e4d-4406-a298-8a640620879c",
+      company_id: "b28cfe88-807b-49de-97f7-fd974cfd0d17",
       session_id: "xxx",
       external_user_id: params.external_user_id,
       langue: "Français",

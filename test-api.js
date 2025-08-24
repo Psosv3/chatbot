@@ -8,7 +8,7 @@ const testAskAPI = async () => {
       },
       body: JSON.stringify({
         question: 'Bonjour, comment allez-vous ?',
-        company_id: 'd6738c8d-7e4d-4406-a298-8a640620879c',
+        company_id: 'b28cfe88-807b-49de-97f7-fd974cfd0d17',
         external_user_id: 'test-user-123',
         langue: 'Français'
       }),
