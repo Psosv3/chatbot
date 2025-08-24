@@ -5,7 +5,7 @@ import crypto from "crypto";
 const VERIFY_TOKEN = process.env.MESSENGER_VERIFY_TOKEN!;
 const APP_SECRET = process.env.MESSENGER_APP_SECRET!;
 const PAGE_TOKEN = process.env.MESSENGER_PAGE_TOKEN!;
-const PUBLIC_ASK_URL = process.env.NEXT_PUBLIC_API_URL + "/ask_public/"; // même cible que ton code
+const PUBLIC_ASK_URL = process.env.NEXT_PUBLIC_API_URL + "/api/ask"; // correction de l'URL
 
 // --- Vérification Webhook (GET) ---
 export async function GET(req: NextRequest) {
@@ -84,10 +84,13 @@ async function askBot(params: {
 
 // --- Réception des events (POST) ---
 export async function POST(req: NextRequest) {
+  console.log("🔔 Webhook POST reçu");
   const rawBody = await req.text(); 
+  console.log("📝 Body reçu:", rawBody.substring(0, 200) + "...");
 
   // 1) Vérifier la signature Meta
   if (!verifySignature(req, rawBody)) {
+    console.error("❌ Signature invalide");
     return new NextResponse("Invalid signature", { status: 403 });
   }
 
@@ -97,15 +100,22 @@ export async function POST(req: NextRequest) {
     return new NextResponse("Not Found", { status: 404 });
   }
 
+  console.log("📋 Entrées reçues:", body.entry?.length || 0);
+  
   for (const entry of body.entry ?? []) {
+    console.log("📨 Page ID:", entry.id);
+    
     for (const event of entry.messaging ?? []) {
       const psid = event.sender?.id as string | undefined;
+      console.log("👤 PSID:", psid);
 
       // Message texte utilisateur
       const userText: string | undefined = event.message?.text;
+      console.log("💬 Message texte:", userText);
 
       // Postback bouton (ex: "GET_STARTED")
       const postbackPayload: string | undefined = event.postback?.payload;
+      console.log("🔘 Postback:", postbackPayload);
 
       if (!psid) continue;
 
