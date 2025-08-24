@@ -6,7 +6,7 @@ const VERIFY_TOKEN = process.env.MESSENGER_VERIFY_TOKEN!;
 const APP_SECRET = process.env.MESSENGER_APP_SECRET!;
 const PAGE_TOKEN = process.env.MESSENGER_PAGE_TOKEN!;
 // URL de votre route /ask locale (pas besoin de NEXT_PUBLIC_API_URL)
-const PUBLIC_ASK_URL = "/api/ask";
+const PUBLIC_ASK_URL = `${process.env.NEXT_PUBLIC_API_URL}/ask_public/`;
 
 // --- Vérification Webhook (GET) ---
 export async function GET(req: NextRequest) {
@@ -70,8 +70,8 @@ async function askBot(params: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       question: params.question,
-      company_id: params.company_id || "d6738c8d-7e4d-4406-a298-8a640620879c",
-      session_id: params.session_id,
+      company_id: "d6738c8d-7e4d-4406-a298-8a640620879c",
+      session_id: "xxx",
       external_user_id: params.external_user_id,
       langue: "Français",
     }),
