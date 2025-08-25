@@ -5,8 +5,26 @@ import crypto from "crypto";
 const VERIFY_TOKEN = process.env.MESSENGER_VERIFY_TOKEN!;
 const APP_SECRET = process.env.MESSENGER_APP_SECRET!;
 const PAGE_TOKEN = process.env.MESSENGER_PAGE_TOKEN!;
-// URL de votre route /ask locale (pas besoin de NEXT_PUBLIC_API_URL)
 const PUBLIC_ASK_URL = `${process.env.NEXT_PUBLIC_API_URL}/ask_public/`;
+
+// Cache pour éviter les doublons (en production, utilisez Redis)
+const processedMessages = new Map<string, number>();
+const userRateLimit = new Map<string, number>();
+
+// Nettoyage du cache toutes les 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, timestamp] of processedMessages.entries()) {
+    if (now - timestamp > 300000) { // 5 minutes
+      processedMessages.delete(key);
+    }
+  }
+  for (const [key, timestamp] of userRateLimit.entries()) {
+    if (now - timestamp > 60000) { // 1 minute
+      userRateLimit.delete(key);
+    }
+  }
+}, 300000);
 
 // --- Vérification Webhook (GET) ---
 export async function GET(req: NextRequest) {
@@ -23,25 +41,32 @@ export async function GET(req: NextRequest) {
 
 // --- Utilitaires Messenger ---
 async function sendSenderAction(psid: string, action: "typing_on" | "typing_off" | "mark_seen") {
-  await fetch(`https://graph.facebook.com/v20.0/me/messages?access_token=${PAGE_TOKEN}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ recipient: { id: psid }, sender_action: action }),
-  });
+  try {
+    await fetch(`https://graph.facebook.com/v20.0/me/messages?access_token=${PAGE_TOKEN}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recipient: { id: psid }, sender_action: action }),
+    });
+  } catch (error) {
+    console.error("Erreur lors de l'envoi de l'action:", error);
+  }
 }
 
 async function sendText(psid: string, text: string) {
-  // (Facultatif) tronquer si trop long
-  const safe = text?.slice(0, 1900) || "Désolé, je n'ai pas compris.";
-  await fetch(`https://graph.facebook.com/v20.0/me/messages?access_token=${PAGE_TOKEN}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      recipient: { id: psid },
-      message: { text: safe },
-      messaging_type: "RESPONSE", // respecte la fenêtre 24h
-    }),
-  });
+  try {
+    const safe = text?.slice(0, 1900) || "Désolé, je n'ai pas compris.";
+    await fetch(`https://graph.facebook.com/v20.0/me/messages?access_token=${PAGE_TOKEN}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        recipient: { id: psid },
+        message: { text: safe },
+        messaging_type: "RESPONSE",
+      }),
+    });
+  } catch (error) {
+    console.error("Erreur lors de l'envoi du message:", error);
+  }
 }
 
 // --- Vérif signature HMAC de Meta ---
@@ -55,15 +80,40 @@ function verifySignature(req: NextRequest, rawBody: string) {
   }
 }
 
-// --- Ton call vers l'API publique /ask_public/ (ton code) ---
+// --- Rate limiting par utilisateur ---
+function isRateLimited(psid: string): boolean {
+  const now = Date.now();
+  const lastCall = userRateLimit.get(psid);
+  
+  if (lastCall && now - lastCall < 2000) { // 2 secondes entre appels
+    return true;
+  }
+  
+  userRateLimit.set(psid, now);
+  return false;
+}
+
+// --- Vérification des doublons ---
+function isDuplicateMessage(psid: string, messageId: string): boolean {
+  const key = `${psid}:${messageId}`;
+  const now = Date.now();
+  
+  if (processedMessages.has(key)) {
+    return true;
+  }
+  
+  processedMessages.set(key, now);
+  return false;
+}
+
+// --- Appel vers l'API publique ---
 async function askBot(params: {
   question: string;
   company_id?: string;
   session_id?: string;
-  external_user_id?: string; // on mettra le PSID ici
+  external_user_id?: string;
 }) {
   console.log("🤖 Appel de askBot avec:", params);
-  console.log("🌐 URL appelée:", PUBLIC_ASK_URL);
   
   try {
     const res = await fetch(PUBLIC_ASK_URL, {
@@ -82,7 +132,7 @@ async function askBot(params: {
     if (!res.ok) {
       throw new Error(`Backend error ${res.status}: ${JSON.stringify(data)}`);
     }
-    // on suppose que ta réponse Python renvoie { answer: "...", ... }
+    
     return (data?.answer as string) || "Désolé, je n'ai pas de réponse pour le moment.";
   } catch (error) {
     console.error("❌ Erreur lors de l'appel à l'API:", error);
@@ -92,7 +142,7 @@ async function askBot(params: {
       return "Je suis temporairement surchargé. Voici une réponse de base : Je suis votre assistant virtuel. Comment puis-je vous aider aujourd'hui ? 🤖";
     }
     
-    throw error; // Relancer l'erreur pour la gestion dans le webhook
+    throw error;
   }
 }
 
@@ -121,40 +171,61 @@ export async function POST(req: NextRequest) {
     
     for (const event of entry.messaging ?? []) {
       const psid = event.sender?.id as string | undefined;
+      const messageId = event.message?.mid || event.postback?.mid;
+      
       console.log("👤 PSID:", psid);
+      console.log("🆔 Message ID:", messageId);
+
+      // Ignorer les événements sans PSID
+      if (!psid) continue;
+
+      // Vérifier le rate limiting
+      if (isRateLimited(psid)) {
+        console.log("⚠️ Rate limit atteint pour PSID:", psid);
+        continue;
+      }
+
+      // Vérifier les doublons (seulement pour les messages texte)
+      if (messageId && isDuplicateMessage(psid, messageId)) {
+        console.log("🔄 Message en double détecté, ignoré");
+        continue;
+      }
 
       // Message texte utilisateur
       const userText: string | undefined = event.message?.text;
       console.log("💬 Message texte:", userText);
 
-      // Postback bouton (ex: "GET_STARTED")
+      // Postback bouton
       const postbackPayload: string | undefined = event.postback?.payload;
       console.log("🔘 Postback:", postbackPayload);
 
-      if (!psid) continue;
-
-      // Marquer vu + typing
+      // Marquer vu
       await sendSenderAction(psid, "mark_seen");
 
-      // Si c'est un postback, on peut le transformer en "question" aussi
-      const incoming = userText || postbackPayload;
+      // Traiter seulement les messages texte et postbacks significatifs
+      const incoming = userText || (postbackPayload && postbackPayload !== "GET_STARTED" ? postbackPayload : null);
+      
       if (!incoming) {
-        await sendText(psid, "Je suis là ! Posez-moi votre question 🙂");
+        // Réponse par défaut pour les postbacks GET_STARTED
+        if (postbackPayload === "GET_STARTED") {
+          await sendText(psid, "Bonjour ! Je suis votre assistant virtuel. Posez-moi votre question et je ferai de mon mieux pour vous aider. 🤖");
+        }
         continue;
       }
 
       try {
         await sendSenderAction(psid, "typing_on");
 
-        // 2) APPEL DE TON API : on passe le PSID dans external_user_id pour tracabilité
+        // Appel de l'API avec délai pour éviter la surcharge
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
         const answer = await askBot({
           question: incoming,
-          company_id: undefined, // ou mappage par Page si multi-tenant
-          session_id: undefined, // ou un UUID basé sur le thread
+          company_id: undefined,
+          session_id: undefined,
           external_user_id: psid,
         });
 
-        // 3) RÉPONDRE DANS MESSENGER avec la réponse de ton API
         await sendText(psid, answer);
       } catch (e: unknown) {
         const message = typeof e === "object" && e !== null && "message" in e
@@ -162,9 +233,9 @@ export async function POST(req: NextRequest) {
           : String(e);
         console.error("Messenger handler error:", message);
         
-        // Gestion spécifique des erreurs Mistral AI
+        // Gestion spécifique des erreurs
         if (message.includes("429") || message.includes("capacity exceeded")) {
-          await sendText(psid, "Désolé, je suis temporairement surchargé. Réessayez dans quelques minutes ou contactez le support si le problème persiste. 🤖");
+          await sendText(psid, "Désolé, je suis temporairement surchargé. Réessayez dans quelques minutes. 🤖");
         } else if (message.includes("Backend error 500")) {
           await sendText(psid, "Oups, un souci côté serveur. Réessayez dans un instant svp. 🔧");
         } else {
