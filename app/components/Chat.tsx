@@ -85,11 +85,30 @@ export default function Chat() {
         body: JSON.stringify(requestBody),
       });
 
+      
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
+      
+      console.log({response});
 
-      const data = await response.json();
+      // Récupérer la réponse en tant que texte d'abord
+      const responseText = await response.text();
+      console.log('Raw response:', responseText);
+      
+      // Essayer de parser en JSON, sinon créer un objet JSON avec le string
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        // Si ce n'est pas du JSON valide, traiter comme un string
+        console.log('Response is not JSON, treating as string');
+        data = { answer: responseText };
+      }
+      
+      console.log({data});
+      // Afficher la réponse JSON complète dans la console
+      console.log(data);
       
       // Créer le message bot avec timestamp
       const botMessage: Message = { 

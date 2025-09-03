@@ -32,7 +32,7 @@ export async function GET(request: Request) {
     height: 100%;
     background: transparent;
     border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    // box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
   \`;
   iframe.setAttribute('allow', 'clipboard-write');
 
