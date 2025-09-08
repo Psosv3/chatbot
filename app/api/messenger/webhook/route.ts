@@ -2,20 +2,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 
-const VERIFY_TOKEN = process.env.MESSENGER_VERIFY_TOKEN!;
-const APP_SECRET = process.env.MESSENGER_APP_SECRET!;
-const PAGE_TOKEN = process.env.MESSENGER_PAGE_TOKEN!;
 const PUBLIC_ASK_URL = `${process.env.NEXT_PUBLIC_API_URL}/ask_public/`;
 
-// Vérification des variables d'environnement
-console.log("🔧 Configuration webhook:");
-console.log("✅ VERIFY_TOKEN:", VERIFY_TOKEN ? "✓ Configuré" : "❌ Manquant");
-console.log("✅ APP_SECRET:", APP_SECRET ? "✓ Configuré" : "❌ Manquant");
-console.log("✅ PAGE_TOKEN:", PAGE_TOKEN ? "✓ Configuré" : "❌ Manquant");
-console.log("✅ PUBLIC_ASK_URL:", PUBLIC_ASK_URL ? "✓ Configuré" : "❌ Manquant");
-
-if (!VERIFY_TOKEN || !APP_SECRET || !PAGE_TOKEN) {
-  console.error("❌ Variables d'environnement manquantes pour le webhook Messenger");
+// Fonction pour extraire les tokens des paramètres URL
+function getTokensFromUrl(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const verify_token = searchParams.get("verify_token");
+  const app_secret = searchParams.get("app_secret");
+  const page_token = searchParams.get("page_token");
+  
+  console.log("🔧 Configuration webhook (depuis paramètres URL):");
+  console.log("✅ VERIFY_TOKEN:", verify_token ? "✓ Configuré" : "❌ Manquant");
+  console.log("✅ APP_SECRET:", app_secret ? "✓ Configuré" : "❌ Manquant");
+  console.log("✅ PAGE_TOKEN:", page_token ? "✓ Configuré" : "❌ Manquant");
+  console.log("✅ PUBLIC_ASK_URL:", PUBLIC_ASK_URL ? "✓ Configuré" : "❌ Manquant");
+  
+  return { verify_token, app_secret, page_token };
 }
 
 // Cache pour éviter les doublons (en production, utilisez Redis)
@@ -44,18 +46,26 @@ export async function GET(req: NextRequest) {
   const token = searchParams.get("hub.verify_token");
   const challenge = searchParams.get("hub.challenge");
 
-  if (mode === "subscribe" && token === VERIFY_TOKEN) {
+  // Extraire les tokens depuis les paramètres URL
+  const { verify_token } = getTokensFromUrl(req);
+  
+  if (!verify_token) {
+    console.error("❌ verify_token manquant dans les paramètres URL");
+    return new NextResponse("Missing verify_token parameter", { status: 400 });
+  }
+
+  if (mode === "subscribe" && token === verify_token) {
     return new NextResponse(challenge ?? "", { status: 200 });
   }
   return new NextResponse("Forbidden", { status: 403 });
 }
 
 // --- Utilitaires Messenger ---
-async function sendSenderAction(psid: string, action: "typing_on" | "typing_off" | "mark_seen") {
+async function sendSenderAction(psid: string, action: "typing_on" | "typing_off" | "mark_seen", pageToken: string) {
   try {
     console.log(`📤 Envoi de l'action ${action} pour PSID: ${psid}`);
     
-    const response = await fetch(`https://graph.facebook.com/v20.0/me/messages?access_token=${PAGE_TOKEN}`, {
+    const response = await fetch(`https://graph.facebook.com/v20.0/me/messages?access_token=${pageToken}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ recipient: { id: psid }, sender_action: action }),
@@ -75,12 +85,12 @@ async function sendSenderAction(psid: string, action: "typing_on" | "typing_off"
   }
 }
 
-async function sendText(psid: string, text: string) {
+async function sendText(psid: string, text: string, pageToken: string) {
   try {
     console.log(`📤 Envoi du message pour PSID: ${psid}:`, text.substring(0, 100) + "...");
     
     const safe = text?.slice(0, 1900) || "Désolé, je n'ai pas compris.";
-    const response = await fetch(`https://graph.facebook.com/v20.0/me/messages?access_token=${PAGE_TOKEN}`, {
+    const response = await fetch(`https://graph.facebook.com/v20.0/me/messages?access_token=${pageToken}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -105,9 +115,9 @@ async function sendText(psid: string, text: string) {
 }
 
 // --- Vérif signature HMAC de Meta ---
-function verifySignature(req: NextRequest, rawBody: string) {
+function verifySignature(req: NextRequest, rawBody: string, appSecret: string) {
   const sig = req.headers.get("x-hub-signature-256") || "";
-  const expected = "sha256=" + crypto.createHmac("sha256", APP_SECRET).update(rawBody, "utf8").digest("hex");
+  const expected = "sha256=" + crypto.createHmac("sha256", appSecret).update(rawBody, "utf8").digest("hex");
   try {
     return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(sig));
   } catch {
@@ -192,8 +202,16 @@ export async function POST(req: NextRequest) {
   const rawBody = await req.text(); 
   console.log("📝 Body reçu:", rawBody.substring(0, 200) + "...");
 
+  // Extraire les tokens depuis les paramètres URL
+  const { app_secret, page_token } = getTokensFromUrl(req);
+  
+  if (!app_secret || !page_token) {
+    console.error("❌ app_secret ou page_token manquant dans les paramètres URL");
+    return new NextResponse("Missing required parameters (app_secret, page_token)", { status: 400 });
+  }
+
   // 1) Vérifier la signature Meta
-  if (!verifySignature(req, rawBody)) {
+  if (!verifySignature(req, rawBody, app_secret)) {
     console.error("❌ Signature invalide");
     return new NextResponse("Invalid signature", { status: 403 });
   }
@@ -241,7 +259,7 @@ export async function POST(req: NextRequest) {
 
       // Marquer vu
       console.log("👁️ Tentative de marquage 'vu'...");
-      const markSeenResult = await sendSenderAction(psid, "mark_seen");
+      const markSeenResult = await sendSenderAction(psid, "mark_seen", page_token);
       if (!markSeenResult) {
         console.error("❌ Échec du marquage 'vu' pour PSID:", psid);
       } else {
@@ -255,7 +273,7 @@ export async function POST(req: NextRequest) {
         // Réponse par défaut pour les postbacks GET_STARTED
         if (postbackPayload === "GET_STARTED") {
           console.log("🚀 Envoi du message de bienvenue GET_STARTED");
-          const welcomeResult = await sendText(psid, "Bonjour ! Je suis votre assistant virtuel. Posez-moi votre question et je ferai de mon mieux pour vous aider. 🤖");
+          const welcomeResult = await sendText(psid, "Bonjour ! Je suis votre assistant virtuel. Posez-moi votre question et je ferai de mon mieux pour vous aider. 🤖", page_token);
           if (!welcomeResult) {
             console.error("❌ Échec de l'envoi du message de bienvenue");
           }
@@ -265,7 +283,7 @@ export async function POST(req: NextRequest) {
 
       try {
         console.log("⌨️ Activation de l'indicateur de frappe...");
-        const typingResult = await sendSenderAction(psid, "typing_on");
+        const typingResult = await sendSenderAction(psid, "typing_on", page_token);
         if (!typingResult) {
           console.error("❌ Échec de l'activation de l'indicateur de frappe");
         }
@@ -283,7 +301,7 @@ export async function POST(req: NextRequest) {
         });
 
         console.log("📤 Envoi de la réponse à l'utilisateur...");
-        const sendResult = await sendText(psid, answer);
+        const sendResult = await sendText(psid, answer, page_token);
         if (!sendResult) {
           console.error("❌ Échec de l'envoi de la réponse");
         } else {
@@ -305,13 +323,13 @@ export async function POST(req: NextRequest) {
         }
         
         console.log("📤 Envoi du message d'erreur...");
-        const errorResult = await sendText(psid, errorMessage);
+        const errorResult = await sendText(psid, errorMessage, page_token);
         if (!errorResult) {
           console.error("❌ Échec de l'envoi du message d'erreur");
         }
       } finally {
         console.log("⌨️ Désactivation de l'indicateur de frappe...");
-        const typingOffResult = await sendSenderAction(psid, "typing_off");
+        const typingOffResult = await sendSenderAction(psid, "typing_off", page_token);
         if (!typingOffResult) {
           console.error("❌ Échec de la désactivation de l'indicateur de frappe");
         }
