@@ -166,7 +166,13 @@ export default function Chat() {
                   : 'bg-gray-100 text-gray-800 rounded-tl-none'
               }`}
             >
-              {message.text}
+              {/* METTRE A LA LIGNE QUAND IL Y A UN \n */}
+              {message.text.split('\n').map((line, lineIndex) => (
+                <span key={lineIndex}>
+                  {line}
+                  {lineIndex < message.text.split('\n').length - 1 && <br />}
+                </span>
+              ))}
             </div>
           </div>
         ))}
