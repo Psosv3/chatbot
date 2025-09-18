@@ -192,7 +192,7 @@ class SessionService {
     
     // Mots-clés spécifiques au malgache
     const malagasyKeywords = [
-      'misaotra', 'veloma', 'manao ahoana', 'salama', 'tsara', 'ratsy', 'misy', 'tsy misy',
+      'misaotra', 'veloma', 'manao ahoana', 'salama', 'miarahaba', 'tsara', 'ratsy', 'misy', 'tsy misy',
       'mandeha', 'mipetraka', 'mihinana', 'misotro', 'matory', 'mifoha',
       'trano', 'olona', 'zavatra', 'andro', 'volana', 'taona', 'fotoana',
       'eto', 'any', 'ao', 'izay', 'izao', 'izany', 'izareo',

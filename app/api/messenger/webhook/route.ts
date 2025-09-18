@@ -173,7 +173,8 @@ async function askBot(params: {
         company_id: "b28cfe88-807b-49de-97f7-fd974cfd0d17",
         session_id: "xxx",
         external_user_id: params.external_user_id,
-        langue: detectedLanguage,
+        // langue: detectedLanguage
+        langue: "malgache",
       }),
     });
 
@@ -303,8 +304,7 @@ export async function POST(req: NextRequest) {
           question: incoming,
           company_id: undefined,
           session_id: undefined,
-          external_user_id: psid,
-          langue: "malgache"
+          external_user_id: psid
         });
 
         console.log("📤 Envoi de la réponse à l'utilisateur...");
