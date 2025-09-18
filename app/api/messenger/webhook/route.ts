@@ -1,6 +1,7 @@
 // app/api/messenger/webhook/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
+import { sessionService } from "../../../lib/sessionService";
 
 const PUBLIC_ASK_URL = `${process.env.NEXT_PUBLIC_API_URL}/ask_public/`;
 
@@ -158,7 +159,9 @@ async function askBot(params: {
   session_id?: string;
   external_user_id?: string;
 }) {
-  
+  // Détecter automatiquement la langue de la question
+  const detectedLanguage = sessionService.detectLanguage(params.question);
+  console.log(`🌍 Langue détectée pour "${params.question}": ${detectedLanguage}`);
   
   try {
     const res = await fetch(PUBLIC_ASK_URL, {
@@ -169,7 +172,7 @@ async function askBot(params: {
         company_id: "b28cfe88-807b-49de-97f7-fd974cfd0d17",
         session_id: "xxx",
         external_user_id: params.external_user_id,
-        langue: "Français",
+        langue: detectedLanguage,
       }),
     });
 
@@ -180,6 +183,7 @@ async function askBot(params: {
 
    
     console.log("🤖 Appel de askBot avec:", params);
+    console.log("🤖 Langue utilisée:", detectedLanguage);
     console.log("🤖 Réponse de l'API:", data);
     
     return (data?.answer as string) || "Désolé, je n'ai pas de réponse pour le moment.";
@@ -273,7 +277,8 @@ export async function POST(req: NextRequest) {
         // Réponse par défaut pour les postbacks GET_STARTED
         if (postbackPayload === "GET_STARTED") {
           console.log("🚀 Envoi du message de bienvenue GET_STARTED");
-          const welcomeResult = await sendText(psid, "Bonjour ! Je suis votre assistant virtuel. Posez-moi votre question et je ferai de mon mieux pour vous aider. 🤖", page_token);
+          const welcomeMessage = "Bonjour ! Je suis votre assistant virtuel. Posez-moi votre question et je ferai de mon mieux pour vous aider. 🤖";
+          const welcomeResult = await sendText(psid, welcomeMessage, page_token);
           if (!welcomeResult) {
             console.error("❌ Échec de l'envoi du message de bienvenue");
           }
