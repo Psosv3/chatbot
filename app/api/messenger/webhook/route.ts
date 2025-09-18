@@ -158,6 +158,7 @@ async function askBot(params: {
   company_id?: string;
   session_id?: string;
   external_user_id?: string;
+  langue?: string;
 }) {
   // Détecter automatiquement la langue de la question
   const detectedLanguage = sessionService.detectLanguage(params.question);
@@ -303,6 +304,7 @@ export async function POST(req: NextRequest) {
           company_id: undefined,
           session_id: undefined,
           external_user_id: psid,
+          langue: "malgache"
         });
 
         console.log("📤 Envoi de la réponse à l'utilisateur...");
