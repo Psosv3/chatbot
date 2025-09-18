@@ -69,12 +69,17 @@ export default function Chat() {
     setIsLoading(true);
 
     try {
+      // Détecter automatiquement la langue de la question
+      const detectedLanguage = sessionService.detectLanguage(question);
+      console.log(`Langue détectée: ${detectedLanguage}`);
+      
       // Préparer la requête avec session_id et external_user_id
       const requestBody = {
         question: question,
         company_id: companyId,
         session_id: currentSession.sessionId,
-        external_user_id: currentSession.externalUserId
+        external_user_id: currentSession.externalUserId,
+        langue: detectedLanguage
       };
 
       const response = await fetch('/api/ask', {

@@ -4,7 +4,7 @@ import http from 'http';
 
 export async function POST(req: NextRequest) {
   try {
-    const { question, company_id, session_id, external_user_id } = await req.json();
+    const { question, company_id, session_id, external_user_id, langue } = await req.json();
 
     if (!question) {
       return NextResponse.json({ error: 'Question manquante' }, { status: 400 });
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
       company_id: company_id || 'd6738c8d-7e4d-4406-a298-8a640620879c',
       session_id: session_id,
       external_user_id: external_user_id,
-      langue: 'Français'
+      langue: langue || 'français' // Utiliser la langue détectée ou malgache par défaut
     };
 
     // Créer un agent HTTP pour les requêtes non-sécurisées
@@ -35,7 +35,9 @@ export async function POST(req: NextRequest) {
       agent: httpAgent,
     });
 
+    console.log('requestBody.langue',requestBody.langue);
     const data = await response.json();
+    console.log('response.json()', data);
     
     if (!response.ok) {
       return NextResponse.json({
