@@ -82,6 +82,15 @@ export default function Chat() {
         langue: detectedLanguage
       };
 
+      // Créer une URL avec les paramètres pour EventSource
+      const params = new URLSearchParams();
+      Object.entries(requestBody).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          params.append(key, value.toString());
+        }
+      });
+
+      // Utiliser fetch pour initier la requête et obtenir un stream
       const response = await fetch('/api/ask', {
         method: 'POST',
         headers: {
@@ -90,58 +99,104 @@ export default function Chat() {
         body: JSON.stringify(requestBody),
       });
 
-      
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
-      console.log({response});
 
-      // Récupérer la réponse en tant que texte d'abord
-      const responseText = await response.text();
-      console.log('Raw response:', responseText);
-      
-      // Essayer de parser en JSON, sinon créer un objet JSON avec le string
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch {
-        // Si ce n'est pas du JSON valide, traiter comme un string
-        console.log('Response is not JSON, treating as string');
-        data = { answer: responseText };
+      // Lire le stream de réponse
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      if (reader) {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) {
+              break;
+            }
+
+            // Décoder le chunk
+            const chunk = decoder.decode(value, { stream: true });
+            buffer += chunk;
+            
+            console.log('Chunk reçu:', chunk);
+
+            // Traiter les événements SSE complets
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // Garder la ligne incomplète
+
+            for (const line of lines) {
+              console.log('Ligne traitée:', line);
+              
+              // Gérer le format SSE standard avec "data: "
+              if (line.startsWith('data: ')) {
+                try {
+                  const eventData = JSON.parse(line.slice(6)); // Enlever 'data: '
+                  
+                  // Ignorer les événements de heartbeat
+                  if (eventData.event === 'heartbeat' || eventData.event === 'ping_disconnect') {
+                    continue;
+                  }
+
+                  // Gérer les erreurs
+                  if (eventData.error) {
+                    console.error('Erreur du backend:', eventData.error);
+                    const errorMessage: Message = { 
+                      text: `Erreur: ${eventData.error}`, 
+                      isUser: false,
+                      timestamp: new Date().toISOString()
+                    };
+                    setMessages(prev => [...prev, errorMessage]);
+                    sessionService.addMessageToSession(currentSession.sessionId, errorMessage);
+                    continue;
+                  }
+
+                  // Traiter les réponses avec answer
+                  if (eventData.answer) {
+                    console.log('Nouvelle réponse reçue:', eventData);
+                    
+                    const botMessage: Message = { 
+                      text: eventData.answer, 
+                      isUser: false, 
+                      timestamp: new Date().toISOString() 
+                    };
+                    
+                    // Ajouter la réponse du bot à l'affichage et à la session
+                    setMessages(prev => [...prev, botMessage]);
+                    sessionService.addMessageToSession(currentSession.sessionId, botMessage);
+                    
+                    // Mettre à jour le sessionId si le backend a retourné un nouveau
+                    if (eventData.session_id && eventData.session_id !== currentSession.sessionId) {
+                      sessionService.updateSessionId(currentSession.sessionId, eventData.session_id);
+                      setCurrentSession(prev => prev ? { ...prev, sessionId: eventData.session_id } : null);
+                    }
+                    
+                    // Mettre à jour la session complète
+                    setCurrentSession(prev => {
+                      if (!prev) return null;
+                      const updatedSession: ChatSession = {
+                        ...prev,
+                        sessionId: eventData.session_id || prev.sessionId,
+                        messages: [...prev.messages, userMessage, botMessage]
+                      };
+                      sessionService.saveSession(updatedSession);
+                      return updatedSession;
+                    });
+                  }
+                } catch (parseError) {
+                  console.error('Erreur lors du parsing de l\'événement SSE:', parseError, 'Line:', line);
+                }
+              }
+            }
+          }
+        } finally {
+          reader.releaseLock();
+        }
       }
       
-      console.log({data});
-      // Afficher la réponse JSON complète dans la console
-      console.log(data);
-      
-      // Créer le message bot avec timestamp
-      const botMessage: Message = { 
-        text: data.answer, 
-        isUser: false, 
-        timestamp: new Date().toISOString() 
-      };
-      
-      // Ajouter la réponse du bot à l'affichage et à la session
-      setMessages(prev => [...prev, botMessage]);
-      sessionService.addMessageToSession(currentSession.sessionId, botMessage);
-      
-      // Mettre à jour le sessionId si le backend a retourné un nouveau
-      if (data.session_id && data.session_id !== currentSession.sessionId) {
-        sessionService.updateSessionId(currentSession.sessionId, data.session_id);
-        setCurrentSession(prev => prev ? { ...prev, sessionId: data.session_id } : null);
-      }
-      
-      // Mettre à jour la session complète
-      const updatedSession: ChatSession = {
-        ...currentSession,
-        sessionId: data.session_id || currentSession.sessionId,
-        messages: [...currentSession.messages, userMessage, botMessage]
-      };
-      sessionService.saveSession(updatedSession);
-      setCurrentSession(updatedSession);
-      
-      console.log("Message émis et session sauvegardée:", data.session_id);
+      console.log("Stream terminé, session sauvegardée");
     } catch (error) {
       console.error('Erreur lors de la communication avec le backend:', error);
       const errorMessage: Message = { 

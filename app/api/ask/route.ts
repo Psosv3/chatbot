@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fetch from 'node-fetch';
-import http from 'http';
+// import http from 'http';
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,39 +15,73 @@ export async function POST(req: NextRequest) {
       company_id: company_id || 'd6738c8d-7e4d-4406-a298-8a640620879c',
       session_id: session_id,
       external_user_id: external_user_id,
-      langue: langue || 'français' // Utiliser la langue détectée ou malgache par défaut
+      langue: langue || 'français'
     };
 
-    // Créer un agent HTTP pour les requêtes non-sécurisées
-    const httpAgent = new http.Agent({
-      keepAlive: true,
-    });
-
-    // Appeler le backend Python
+    // Appeler le backend Python en streaming
     const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/ask_public/`, {
     // const response = await fetch('http://localhost:8000/ask_public/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'text/event-stream',
       },
       body: JSON.stringify(requestBody),
-      agent: httpAgent,
     });
 
-    console.log('requestBody.langue',requestBody.langue);
-    const data = await response.json();
-    console.log('response.json()', data);
+    console.log('requestBody.langue', requestBody.langue);
     
     if (!response.ok) {
+      const errorData = await response.text();
       return NextResponse.json({
         error: 'Erreur du backend',
         status: response.status,
         statusText: response.statusText,
-        details: data
+        details: errorData
       }, { status: response.status });
     }
 
-    return NextResponse.json(data);
+    // Créer un stream pour proxy les événements SSE
+    const stream = new ReadableStream({
+      start(controller) {
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+
+        const pump = async () => {
+          try {
+            while (true) {
+              const { done, value } = await reader!.read();
+              
+              if (done) {
+                controller.close();
+                break;
+              }
+
+              // Décoder et transmettre les chunks
+              const chunk = decoder.decode(value, { stream: true });
+              controller.enqueue(new TextEncoder().encode(chunk));
+            }
+          } catch (error) {
+            console.error('Erreur lors du streaming:', error);
+            controller.error(error);
+          }
+        };
+
+        pump();
+      }
+    });
+
+    return new NextResponse(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      },
+    });
+
   } catch (error) {
     console.error('Erreur serveur:', error);
     return NextResponse.json({ 
