@@ -11,6 +11,9 @@ interface Message {
   text: string;
   isUser: boolean;
   timestamp: string;
+  userFeedback?: 'like' | 'dislike' | null;
+  feedbackTimestamp?: string;
+  messageId?: string; // Pour identifier le message lors des updates
 }
 
 class SessionService {
@@ -183,6 +186,22 @@ class SessionService {
       }
     } catch (error) {
       console.error('Erreur lors du nettoyage des sessions:', error);
+    }
+  }
+
+  // Met à jour le feedback d'un message
+  updateMessageFeedback(sessionId: string, messageIndex: number, feedback: 'like' | 'dislike' | null): void {
+    try {
+      const sessions = this.getAllSessions();
+      const sessionIndex = sessions.findIndex(s => s.sessionId === sessionId);
+      
+      if (sessionIndex >= 0 && sessions[sessionIndex].messages[messageIndex]) {
+        sessions[sessionIndex].messages[messageIndex].userFeedback = feedback;
+        sessions[sessionIndex].messages[messageIndex].feedbackTimestamp = feedback ? new Date().toISOString() : undefined;
+        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(sessions));
+      }
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour du feedback:', error);
     }
   }
 

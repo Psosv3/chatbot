@@ -57,7 +57,8 @@ export default function Chat() {
     const userMessage: Message = { 
       text: input, 
       isUser: true, 
-      timestamp: new Date().toISOString() 
+      timestamp: new Date().toISOString(),
+      messageId: `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     };
     
     // Ajouter le message à l'affichage et à la session
@@ -160,7 +161,8 @@ export default function Chat() {
                     const botMessage: Message = { 
                       text: eventData.answer, 
                       isUser: false, 
-                      timestamp: new Date().toISOString() 
+                      timestamp: new Date().toISOString(),
+                      messageId: `bot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
                     };
                     
                     // Ajouter la réponse du bot à l'affichage et à la session
@@ -211,6 +213,59 @@ export default function Chat() {
     }
   };
 
+  const handleMessageFeedback = async (messageIndex: number, feedback: 'like' | 'dislike') => {
+    if (!currentSession) return;
+    
+    const message = messages[messageIndex];
+    if (!message) return;
+    
+    // Déterminer le nouveau feedback (toggle si même feedback, sinon appliquer le nouveau)
+    const newFeedback = message.userFeedback === feedback ? null : feedback;
+    
+    // Mettre à jour le message localement
+    setMessages(prev => prev.map((msg, index) => {
+      if (index === messageIndex) {
+        return {
+          ...msg,
+          userFeedback: newFeedback,
+          feedbackTimestamp: newFeedback ? new Date().toISOString() : undefined
+        };
+      }
+      return msg;
+    }));
+    
+    // Mettre à jour dans le sessionService
+    sessionService.updateMessageFeedback(currentSession.sessionId, messageIndex, newFeedback);
+    
+    // Envoyer le feedback au backend si il y a un feedback à envoyer
+    if (newFeedback && message.messageId) {
+      try {
+        const response = await fetch('/api/feedback', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            session_id: currentSession.sessionId,
+            message_id: message.messageId,
+            feedback: newFeedback,
+            company_id: companyId
+          }),
+        });
+
+        if (!response.ok) {
+          console.error('Erreur lors de l\'envoi du feedback:', response.status);
+          // En cas d'erreur, on peut garder le feedback local ou le retirer selon la stratégie souhaitée
+        } else {
+          console.log(`Feedback ${newFeedback} envoyé avec succès pour le message ${messageIndex}`);
+        }
+      } catch (error) {
+        console.error('Erreur lors de l\'envoi du feedback:', error);
+        // En cas d'erreur, on peut garder le feedback local ou le retirer selon la stratégie souhaitée
+      }
+    }
+  };
+
   return (
     <div className="flex flex-col h-full p-4">
       <div className="flex-1 overflow-y-auto mb-4 space-y-4">
@@ -219,21 +274,51 @@ export default function Chat() {
             key={index}
             className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
           >
-            <div
-              className={`p-3 rounded-2xl max-w-[80%] ${
-                message.isUser
-                  ? 'bg-[#0084FF] text-white rounded-tr-none'
-                  : 'bg-gray-100 text-gray-800 rounded-tl-none'
-              }`}
-            >
-              {/* METTRE A LA LIGNE QUAND IL Y A UN \n */}
-              {message.text}
-              {/* {message.text.split('\n').map((line, lineIndex) => (
-                <span key={lineIndex}>
-                  {line}
-                  {lineIndex < message.text.split('\n').length - 1 && <br />}
-                </span>
-              ))} */}
+            <div className={`flex flex-col ${message.isUser ? 'items-end' : 'items-start'} max-w-[80%]`}>
+              <div
+                className={`p-3 rounded-2xl ${
+                  message.isUser
+                    ? 'bg-[#0084FF] text-white rounded-tr-none'
+                    : 'bg-gray-100 text-gray-800 rounded-tl-none'
+                }`}
+              >
+                {/* METTRE A LA LIGNE QUAND IL Y A UN \n */}
+                {message.text}
+                {/* {message.text.split('\n').map((line, lineIndex) => (
+                  <span key={lineIndex}>
+                    {line}
+                    {lineIndex < message.text.split('\n').length - 1 && <br />}
+                  </span>
+                ))} */}
+              </div>
+              
+              {/* Boutons like/dislike uniquement pour les messages du bot */}
+              {!message.isUser && (
+                <div className="flex items-center gap-1 mt-1 ml-2">
+                  <button
+                    onClick={() => handleMessageFeedback(index, 'like')}
+                    className={`p-1 rounded-full hover:bg-gray-200 transition-colors ${
+                      message.userFeedback === 'like' ? 'bg-green-100 text-green-600' : 'text-gray-400 hover:text-green-600'
+                    }`}
+                    title="J'aime cette réponse"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.633 10.5c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3a.75.75 0 01.75-.75A2.25 2.25 0 0116.5 4.5c0 1.152-.26 2.243-.723 3.218-.266.558.107 1.282.725 1.282h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 01-2.649 7.521c-.388.482-.987.729-1.605.729H13.48c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 00-1.423-.23H5.904M14.25 9h2.25M5.904 18.75c.083.205.173.405.27.602.398.83 1.169 1.348 2.126 1.348h2.25c.056 0 .112-.003.167-.01a6.75 6.75 0 006.77-6.77 6.75 6.75 0 00-.143-1.4M5.904 18.75a3.751 3.751 0 01.007-6.9 M5.904 18.75c.044.064.092.126.14.188m0 0h2.25c.056 0 .112-.002.167-.008a6.75 6.75 0 006.77-6.85m-6.77-6.85c-.83-.39-1.62-.833-2.35-1.333-.37-.25-.795-.424-1.23-.508a.75.75 0 00-.85.85c-.033.385-.067.77-.1 1.155M5.904 18.75c-.039-.065-.081-.129-.126-.193a3.751 3.751 0 01-.226-1.982l-.06-1.11M5.904 18.75a3.74 3.74 0 01-.085-1.15L5.6 15.8c-.045-.484-.086-.97-.126-1.455" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => handleMessageFeedback(index, 'dislike')}
+                    className={`p-1 rounded-full hover:bg-gray-200 transition-colors ${
+                      message.userFeedback === 'dislike' ? 'bg-red-100 text-red-600' : 'text-gray-400 hover:text-red-600'
+                    }`}
+                    title="Je n'aime pas cette réponse"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 15h2.25m8.024-9.75c.011.05.028.1.052.148.591 1.2.924 2.55.924 3.977a8.96 8.96 0 01-.999 4.125m.023-8.25c-.076-.365.183-.75.575-.75h.908c.889 0 1.713.518 1.972 1.368.339 1.11.521 2.287.521 3.507 0 1.553-.295 3.036-.831 4.398C20.613 14.547 19.833 15 19 15h-1.053c-.472 0-.745-.556-.5-.96a8.95 8.95 0 00.303-.54m.023-8.25H16.48a4.5 4.5 0 01-1.423-.23l-3.114-1.04a4.5 4.5 0 00-1.423-.23H6.504c-.618 0-1.217.247-1.605.729A11.95 11.95 0 002.25 12c0 .434.023.863.068 1.285C2.427 14.306 3.346 15 4.372 15h3.126c.618 0 .991.724.725 1.282A7.471 7.471 0 007.5 19.5a2.25 2.25 0 002.25 2.25.75.75 0 00.75-.75v-.633c0-.573.11-1.14.322-1.672.304-.759.93-1.33 1.653-1.715a9.04 9.04 0 002.86-2.4c.498-.634 1.226-1.08 2.032-1.08h.384" />
+                    </svg>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         ))}
