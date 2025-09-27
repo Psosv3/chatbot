@@ -152,7 +152,7 @@ function isDuplicateMessage(psid: string, messageId: string): boolean {
   return false;
 }
 
-// --- Appel vers l'API publique ---
+// --- Appel vers l'API publique avec gestion des streams SSE ---
 async function askBot(params: {
   question: string;
   company_id?: string;
@@ -167,7 +167,10 @@ async function askBot(params: {
   try {
     const res = await fetch(PUBLIC_ASK_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream"
+      },
       body: JSON.stringify({
         question: params.question,
         company_id: "b28cfe88-807b-49de-97f7-fd974cfd0d17",
@@ -177,17 +180,78 @@ async function askBot(params: {
       }),
     });
 
-    const data = await res.json();
     if (!res.ok) {
-      throw new Error(`Backend error ${res.status}: ${JSON.stringify(data)}`);
+      const errorData = await res.text();
+      throw new Error(`Backend error ${res.status}: ${errorData}`);
     }
 
-   
     console.log("🤖 Appel de askBot avec:", params);
     console.log("🤖 Langue utilisée:", detectedLanguage);
-    console.log("🤖 Réponse de l'API:", data);
+    console.log("🤖 Début du parsing du stream SSE...");
     
-    return (data?.answer as string) || "Désolé, je n'ai pas de réponse pour le moment.";
+    // Lire le stream de réponse comme dans le chat
+    const reader = res.body?.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let finalAnswer = '';
+
+    if (reader) {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          
+          if (done) {
+            break;
+          }
+
+          // Décoder le chunk
+          const chunk = decoder.decode(value, { stream: true });
+          buffer += chunk;
+          
+          console.log('📦 Chunk SSE reçu:', chunk.substring(0, 100) + '...');
+
+          // Traiter les événements SSE complets
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || ''; // Garder la ligne incomplète
+
+          for (const line of lines) {
+            console.log('📝 Ligne SSE traitée:', line);
+            
+            // Gérer le format SSE standard avec "data: "
+            if (line.startsWith('data: ')) {
+              try {
+                const eventData = JSON.parse(line.slice(6)); // Enlever 'data: '
+                
+                // Ignorer les événements de heartbeat
+                if (eventData.event === 'heartbeat' || eventData.event === 'ping_disconnect') {
+                  continue;
+                }
+
+                // Gérer les erreurs
+                if (eventData.error) {
+                  console.error('❌ Erreur du backend:', eventData.error);
+                  throw new Error(`Backend error: ${eventData.error}`);
+                }
+
+                // Traiter les réponses avec answer
+                if (eventData.answer) {
+                  console.log('✅ Nouvelle réponse reçue:', eventData.answer.substring(0, 100) + '...');
+                  finalAnswer = eventData.answer;
+                }
+              } catch (parseError) {
+                console.error('❌ Erreur lors du parsing de l\'événement SSE:', parseError, 'Line:', line);
+              }
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock();
+      }
+    }
+    
+    console.log("🤖 Stream SSE terminé, réponse finale:", finalAnswer.substring(0, 100) + '...');
+    return finalAnswer || "Désolé, je n'ai pas de réponse pour le moment.";
+    
   } catch (error) {
     console.log("🤖 Appel de askBot avec:", params);
     console.error("❌ Erreur lors de l'appel à l'API:", error);
