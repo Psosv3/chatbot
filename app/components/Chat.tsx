@@ -162,7 +162,7 @@ export default function Chat() {
                       text: eventData.answer, 
                       isUser: false, 
                       timestamp: new Date().toISOString(),
-                      messageId: `bot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+                      messageId: eventData.message_id || `bot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
                     };
                     
                     // Ajouter la réponse du bot à l'affichage et à la session
@@ -217,6 +217,7 @@ export default function Chat() {
     if (!currentSession) return;
     
     const message = messages[messageIndex];
+    console.log('message Index', message);
     if (!message) return;
     
     // Déterminer le nouveau feedback (toggle si même feedback, sinon appliquer le nouveau)
